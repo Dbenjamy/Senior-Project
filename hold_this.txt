@@ -1,0 +1,13 @@
+I have a dataset with 82000 data points, where they look like this:
+```
+                           datetime             X             Y             Z           gx           gy           gz     grav_mag
+geo_code
+830000fffffffff 2019-01-01 06:00:00 -3.906638e+06 -1.313268e+06 -4.867614e+06    82.275933  5772.105796 -2223.519371  6186.114535
+830000fffffffff 2019-01-01 00:00:00 -3.906638e+06 -1.313268e+06 -4.867614e+06 -6143.469582   -26.850421 -2463.094044  6618.895053
+830001fffffffff 2019-01-01 00:00:00  6.114939e+06 -1.812770e+06  3.928083e+04 -5269.417511    -2.793633 -2145.772801  5689.561462
+830001fffffffff 2019-01-01 06:00:00  6.114939e+06 -1.812770e+06  3.928083e+04  -324.039716  5506.334836 -2310.367164  5980.177381
+830002fffffffff 2019-01-01 06:00:00 -4.036113e+06  9.506023e+05 -4.846267e+06    91.628684  5927.857872 -2322.916763  6367.404263
+```
+The data record being kept is the gx, gy, gz, and grav_mag column, while datetime and X, Y, and Z are used to map them to a unique datetime/location combination. The date ranges from the start of 2019 to the end of 2021, there are locations evenly distributes across the Earth's surface, and the delta for time is 6 hours.
+
+Now for my question. I am using the following code to produce a graph with a slider, where the graph shows grav_mag on every point on the surface of the Earth, and the slider lets me change the date of all points so I can see the graph over time. But when I run it, instead of 
