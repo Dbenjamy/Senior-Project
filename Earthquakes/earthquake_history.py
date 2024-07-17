@@ -59,7 +59,7 @@ if __name__ == '__main__':
         query_ranges)
     
     # Write header
-    file_path = f'.\\Data\\EarthquakeData\\earthquake_test.csv'
+    file_path = f'./Data/EarthquakeData/earthquake_test.csv'
     with open(file_path,'w',errors='ignore') as file:
         head = StringIO(query(*query_ranges[0],'query').text)
         for line in head:

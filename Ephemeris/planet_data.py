@@ -12,7 +12,7 @@ def gravity_scaler(xyz,mass:int):
 
 
 if __name__ == '__main__':
-    df = pd.read_csv('.\\Data\\EphemData\\Mars_Barycenter_ephem.csv')
+    df = pd.read_csv('./Data/EphemData/Mars_Barycenter_ephem.csv')
     df[['X','Y']].plot(kind='scatter',x='X',y='Y')
     plt.show()
     data = df[['X','Y','Z']].to_numpy()

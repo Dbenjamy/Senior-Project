@@ -38,8 +38,8 @@ def rel_coords_generator(coords,planet_data,mass):
 
 if __name__ == '__main__':
     
-    planet_data = pd.read_csv('.\\Data\\EphemData\\301_ephem.csv').to_numpy()
-    h3_data = pd.read_csv('.\\Data\\h3Index\\h3_index_0.csv')
+    planet_data = pd.read_csv('./Data/EphemData/301_ephem.csv').to_numpy()
+    h3_data = pd.read_csv('./Data/h3Index/h3_index_0.csv')
     h3_data['X'] = R_earth*np.sin(h3_data['lat'])*np.cos(h3_data['lon'])
     h3_data['Y'] = R_earth*np.sin(h3_data['lat'])*np.sin(h3_data['lon'])
     h3_data['Z'] = R_earth*np.cos(h3_data['lat'])

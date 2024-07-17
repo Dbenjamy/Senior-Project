@@ -119,6 +119,6 @@ if __name__ == '__main__':
             start='2019-01-01',
             end='2022-01-01',
             step='6 h',
-            path=f'.\\Data\\EphemData\\{object.replace(' ','_')}_ephem.csv'
+            path=f'./Data/EphemData/{object.replace(' ','_')}_ephem.csv'
         )
 
