@@ -144,16 +144,15 @@ def process_row(h3_data,planet_data):
 #        grav_coord[2] = grav_coord[2] + rel_coords[2]
     
     result = [*grav_coord,magnitude(grav_coord)]
-    if result == None:
-        raise TypeError("Planet Data extended")
     return result
 # np.concatenate([grav_coords, magnitude(grav_coords)], axis=1)
 
-def process_partition(partition,planet_data):
+def process_partition(partition,date,planet_data):
     results = []
     for row in partition:
         results.append([
             row['geo_code'],
+            str(date),
             row['X'],
             row['Y'],
             row['Z'],
@@ -164,15 +163,19 @@ def process_partition(partition,planet_data):
 def generate_file(num,date,planet_data,h3_data_list):
     
     bag = db.from_sequence(h3_data_list,npartitions=24)
-    processed_partitions = bag.map_partitions(process_partition,planet_data)
+    processed_partitions = bag.map_partitions(process_partition,date,planet_data)
 
-    columns = ['geo_code','X','Y','Z','gx','gy','gz','grav_mag']
-    results = processed_partitions.to_dataframe(columns=columns).compute()
+    columns = ['geo_code','date','X','Y','Z','gx','gy','gz','grav_mag']
+    results = (
+        processed_partitions
+        .to_dataframe(columns=columns)
+        .compute()
+        .set_index('geo_code'))
     path = f'./Data/EphemData/EphemParquet/grav_ephem_{num}.parquet'
-    results.to_parquet(path,engine='pyarrow',index='geo_code')
+    results.to_parquet(path,engine='pyarrow')
 
 if __name__ == '__main__':
-    
+
     client = Client(n_workers=4,threads_per_worker=1)
     masses = {
         '10_ephem.csv':1.989e30,
