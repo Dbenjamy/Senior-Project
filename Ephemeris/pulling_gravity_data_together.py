@@ -99,7 +99,6 @@ def sum_ephemeris():
 
     print(final_df.head())
     print(final_df['datetime'].max())
-    # dd.to_parquet(final_df,'./Data/EphemData/')
     rename(
         './Data/EphemData/part.0.parquet',
         './Data/EphemData/gravity_ephemeris.parquet')
@@ -117,11 +116,8 @@ def scale_coord(coord,distance,scaler):
         coord[1]/distance*scaler,
         coord[2]/distance*scaler]
 
-
-
 # Function to generate relative coordinates
 def relative_coords(coords, planet_tuple, mass):
-#    relative_coords = (-1 * coords + planet_data).astype('float64')
     planet_data = [planet_tuple[1],planet_tuple[2],planet_tuple[3]]
     mag = magnitude(planet_data)
     grav_mag = gravity(mag,mass)
@@ -139,14 +135,8 @@ def process_row(h3_data,planet_data):
             grav_coord[1] + rel_coords[1],
             grav_coord[2] + rel_coords[2]
         ]
-#        grav_coord[0] = grav_coord[0] + rel_coords[0]
-#        grav_coord[1] = grav_coord[1] + rel_coords[1]
-#        grav_coord[2] = grav_coord[2] + rel_coords[2]
-    
     result = [*grav_coord,magnitude(grav_coord)]
     return result
-# np.concatenate([grav_coords, magnitude(grav_coords)], axis=1)
-
 def process_partition(partition,date,planet_data):
     results = []
     for row in partition:
@@ -206,7 +196,7 @@ if __name__ == '__main__':
     datetimes = pd.read_csv(f'./Data/EphemData/{first_file_name}')['CalendarDate(TDB)']
 
     count = 0
-    for date in datetimes.to_list()[:5]:
+    for date in datetimes.to_list():
         generate_file(
             count,
             date,
@@ -214,7 +204,7 @@ if __name__ == '__main__':
             h3_data_list)
         print(f'Completed {count}/{len(datetimes)}')
         count += 1
-        break
+        
 
 
 
