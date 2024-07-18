@@ -3,3 +3,4 @@
 *.pdf
 /Atlas
 .venv
+__pycache__

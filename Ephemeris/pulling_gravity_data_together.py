@@ -1,5 +1,4 @@
 
-import logging
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 from graphing_data import create_3d_plot
@@ -14,54 +13,12 @@ from os import rename
 from dask.distributed import Client
 import dask
 import dask.bag as db
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import pyarrow
+import os
+from time import time
 
 G = 6.67430e-11
 
-def magnitude(xyz):
-#    return np.sqrt(
-#        np.square(xyz_data['gx'])
-#        + np.square(xyz_data['gy'])
-#        + np.square(xyz_data['gz']))
-#    print((xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5)
-#    print('##############')
-    return (xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5
-
-def gravity(distance,mass):
-    result = G*mass/distance**2
-    print('Gravity result:')
-    print(result)
-    print('##############')
-    return result
-
-def scale_coord(coord,distance,scaler):
-    print('Scaled coords:')
-    print([
-        coord[0]/distance*scaler,
-        coord[1]/distance*scaler,
-        coord[2]/distance*scaler])
-
-    print('##############')
-    return [
-        coord[0]/distance*scaler,
-        coord[1]/distance*scaler,
-        coord[2]/distance*scaler]
-
-# Function to generate relative coordinates
-def relative_coords(coords, planet_data, mass):
-#    relative_coords = (-1 * coords + planet_data).astype('float64')
-    mag = magnitude(planet_data)
-    grav_mag = gravity(mag,mass)
-    relative_coords = scale_coord(coords,mag,grav_mag)
-#    distance = np.sqrt(np.sum(np.square(relative_coords), axis=1))
-#    grav_coords = relative_coords / distance[:, None] * gravity_scaler(relative_coords, mass)[:, None]    grav_coords = 
-#    return np.concatenate([planet_data[:, 0].reshape(-1, 1), grav_coords], axis=1)
-    print('Relative coords:')
-    print([*coords,*relative_coords])
-    print('################')
-    return [*coords,*relative_coords]
 
 
 # Function to process each row of h3_data
@@ -127,9 +84,7 @@ def sum_ephemeris():
     final_df = dd.read_parquet(paths[0])
     gravity_dfs = []
     for path in paths[1:]:
-        print('Successful start @@@@@@@@')
         gravity_dfs.append(dd.read_parquet(path))
-        print('Successful end')
 
     for df in gravity_dfs:
         final_df = dd.concat(
@@ -149,6 +104,31 @@ def sum_ephemeris():
         './Data/EphemData/part.0.parquet',
         './Data/EphemData/gravity_ephemeris.parquet')
 
+
+def magnitude(xyz):
+    return (xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5
+
+def gravity(distance,mass):
+    return G*mass/distance**2
+
+def scale_coord(coord,distance,scaler):
+    return [
+        coord[0]/distance*scaler,
+        coord[1]/distance*scaler,
+        coord[2]/distance*scaler]
+
+
+
+# Function to generate relative coordinates
+def relative_coords(coords, planet_tuple, mass):
+#    relative_coords = (-1 * coords + planet_data).astype('float64')
+    planet_data = [planet_tuple[1],planet_tuple[2],planet_tuple[3]]
+    mag = magnitude(planet_data)
+    grav_mag = gravity(mag,mass)
+    relative_coords = scale_coord(coords,mag,grav_mag)
+    return relative_coords
+
+
 def process_row(h3_data,planet_data):
     coords = np.array([h3_data['X'],h3_data['Y'],h3_data['Z']]).tolist()
     grav_coord = [0.0,0.0,0.0]
@@ -162,32 +142,38 @@ def process_row(h3_data,planet_data):
 #        grav_coord[0] = grav_coord[0] + rel_coords[0]
 #        grav_coord[1] = grav_coord[1] + rel_coords[1]
 #        grav_coord[2] = grav_coord[2] + rel_coords[2]
-    result = planet_data.extend([*grav_coord,magnitude(grav_coord)])
-    print('Row results')
-    print(result)
-    print('###############')
+    
+    result = [*grav_coord,magnitude(grav_coord)]
+    if result == None:
+        raise TypeError("Planet Data extended")
     return result
 # np.concatenate([grav_coords, magnitude(grav_coords)], axis=1)
 
 def process_partition(partition,planet_data):
     results = []
     for row in partition:
-        results.append(*process_row(row, planet_data))
-    logger.info(f'Processed partition with {len(partition)} rows.')
+        results.append([
+            row['geo_code'],
+            row['X'],
+            row['Y'],
+            row['Z'],
+            *process_row(row, planet_data)
+        ])
     return results
 
-def generate_file(date,planet_data,h3_data_list):
+def generate_file(num,date,planet_data,h3_data_list):
     
     bag = db.from_sequence(h3_data_list,npartitions=24)
     processed_partitions = bag.map_partitions(process_partition,planet_data)
-    results = processed_partitions.compute()
+
     columns = ['geo_code','X','Y','Z','gx','gy','gz','grav_mag']
-    df = pd.DataFrame(results,columns=columns)
-    df.to_parquet()
+    results = processed_partitions.to_dataframe(columns=columns).compute()
+    path = f'./Data/EphemData/EphemParquet/grav_ephem_{num}.parquet'
+    results.to_parquet(path,engine='pyarrow',index='geo_code')
 
 if __name__ == '__main__':
     
-#    client = Client(n_workers=24,threads_per_worker=1)
+    client = Client(n_workers=4,threads_per_worker=1)
     masses = {
         '10_ephem.csv':1.989e30,
         'Mercury_Barycenter_ephem.csv':3.285e23,
@@ -207,7 +193,6 @@ if __name__ == '__main__':
     h3_data['Z'] = R_earth * np.cos(h3_data['lat'])
     h3_data_list = h3_data.compute().to_dict(orient='records')
 
-#    index = pd.read_csv('./Data/h3_index/h3_index_0.csv')
     ephems = [
         [
             pd.read_csv(f'./Data/EphemData/{file}')[['X','Y','Z']].itertuples(),
@@ -215,15 +200,22 @@ if __name__ == '__main__':
         ]
         for file, mass in masses.items()]
     first_file_name = '10_ephem.csv'
-    print(first_file_name)
     datetimes = pd.read_csv(f'./Data/EphemData/{first_file_name}')['CalendarDate(TDB)']
 
-    for date in datetimes.to_list():
+    count = 0
+    for date in datetimes.to_list()[:5]:
         generate_file(
+            count,
             date,
             [(next(row[0]),row[1]) for row in ephems],
             h3_data_list)
+        print(f'Completed {count}/{len(datetimes)}')
+        count += 1
         break
+
+
+
+
 
 #    for data_path in glob.glob('./Data/EphemData/*.csv'):
 #        key = data_path[len('./Data/EphemData/'):]
