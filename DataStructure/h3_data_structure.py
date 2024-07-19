@@ -14,7 +14,7 @@ def save_data_in_chunks(parents, chunk_size=2000000, output_prefix='output'):
 
     while True:
         end = False
-        with open(f".\\Data\\h3Index\\{output_prefix}_{counter}.csv",
+        with open(f"./Data/h3Index/{output_prefix}_{counter}.csv",
                   'w') as file:
             file.write('geo_code,lat,lon\n')
             for _ in range(chunk_size):

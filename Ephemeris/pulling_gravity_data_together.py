@@ -13,6 +13,7 @@ from os import rename
 from dask.distributed import Client
 import dask
 import dask.bag as db
+import dask.multiprocessing
 import pyarrow
 import os
 from time import time
@@ -141,8 +142,8 @@ def process_partition(partition,date,planet_data):
     results = []
     for row in partition:
         results.append([
-            row['geo_code'],
             str(date),
+            row['geo_code'],
             row['X'],
             row['Y'],
             row['Z'],
@@ -160,13 +161,13 @@ def generate_file(num,date,planet_data,h3_data_list):
         processed_partitions
         .to_dataframe(columns=columns)
         .compute()
-        .set_index('geo_code'))
+        .set_index('date'))
     path = f'./Data/EphemData/EphemParquet/grav_ephem_{num}.parquet'
     results.to_parquet(path,engine='pyarrow')
 
 if __name__ == '__main__':
 
-    client = Client(n_workers=4,threads_per_worker=1)
+    client = Client(n_workers=12,threads_per_worker=2)
     masses = {
         '10_ephem.csv':1.989e30,
         'Mercury_Barycenter_ephem.csv':3.285e23,
