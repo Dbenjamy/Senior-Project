@@ -1,6 +1,4 @@
-import pandas as pd
 import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 
 def create_3d_plot(df):
 
@@ -14,9 +12,7 @@ def create_3d_plot(df):
         if loc not in location_dict:
             location_dict[loc] = {}
         location_dict[loc][row['datetime']] = row['grav_mag']
-
-    # print("location_dict:", location_dict)
-
+    
     fig = go.Figure()
 
     # Get unique locations and initial colors
@@ -58,6 +54,4 @@ def create_3d_plot(df):
     )]
 
     fig.update_layout(sliders=sliders)
-
-    # Show the plot
     fig.show()
