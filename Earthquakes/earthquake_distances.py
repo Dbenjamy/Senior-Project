@@ -47,6 +47,7 @@ def calculate_distance():
         pass
 
     print(min_dist)
-calculate_distance()
+if __name__ == '__main__':
+    calculate_distance()
 
 
