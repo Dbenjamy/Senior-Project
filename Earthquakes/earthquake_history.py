@@ -49,13 +49,13 @@ class EarthquakeQuery(threading.Thread):
 
             else:
                 self.list_lock.acquire()
-                self.query_ranges.append((start_date_time,end_date_time))
+                self.query_ranges.append(
+                    (start_date_time,end_date_time))
                 self.list_lock.release()
         else:
             print(f'Failure on query range {start_date_time} - {end_date_time}.')
 
 def query(start_date_time,end_date_time,query_type='query'):
-
     if query_type == 'count':
         url = 'https://earthquake.usgs.gov/fdsnws/event/1/count?'
     elif query_type == 'query':
@@ -101,25 +101,24 @@ def pull_earthquake_data(
             next(text)
             for line in text:
                 file.write(line)
-    # Convert CSV to Parquet
-    df = dd.read_csv(path=file_path,encoding='latin-1', blocksize="32MB")
-    df['time'] = dd.to_datetime(df['time'])
-    df = df.sort_values('time')
-    df.to_parquet(data_path+'/CSVtoParquet/', engine="pyarrow", compression="snappy")
+
+def format_earthquake_data(path='./Data'):
+    if not exists(path+'/EarthquakeData/EarthquakeEvents'):
+        makedirs(path+'/EarthquakeData/EarthquakeEvents')
     
-def mapping_dates_to_ranges(path='./Data'):
-    ddf = dd.read_parquet(path+'/EarthquakeData/CSVtoParquet')
-    ddf['time'] = ddf['time'].astype(str)
+    ddf = dd.read_csv(
+        path+'/EarthquakeData/earthquake_query_data.csv',
+        encoding='latin-1',
+        blocksize='32MB')
 
     ddf = (
         ddf[ddf['type'] == 'earthquake']
         [['time', 'latitude', 'longitude', 'depth', 'mag', 'magType','rms']]
-        .replace(' 0[0-5].*',' 00:00:00.000',regex=True)
-        .replace(' 0[6-9].*| 1[0-1].*',' 06:00:00.000',regex=True)
-        .replace(' 1[2-7].*',' 12:00:00.000',regex=True)
-        .replace(' 1[8-9].*| 2[0-3].*',' 18:00:00.000',regex=True)
+        .replace('T0[0-5].*','T00:00:00.000',regex=True)
+        .replace('T0[6-9].*|T1[0-1].*','T06:00:00.000',regex=True)
+        .replace('T1[2-7].*','T12:00:00.000',regex=True)
+        .replace('T1[8-9].*|T2[0-3].*','T18:00:00.000',regex=True)
     )
-
     ddf['time'] = dd.to_datetime(ddf['time'])
 
     ddf.to_parquet(
@@ -130,7 +129,7 @@ def mapping_dates_to_ranges(path='./Data'):
 
 if __name__ == '__main__':
     pull_earthquake_data()
-    mapping_dates_to_ranges()
+    format_earthquake_data()
 # All column names
 #     'time', 'latitude', 'longitude', 'depth', 'mag', 'magType', 'nst',
 #     'gap', 'dmin', 'rms', 'net', 'id', 'updated', 'place', 'type',
