@@ -27,11 +27,24 @@ X, Y, Z: These are the Cartesian coordinates of the planet's position in space,
 import requests
 import pandas as pd
 import numpy as np
+from threading import Thread
+from os.path import exists
+from os import makedirs
 from io import StringIO
-try:
-    from Ephemeris.convert_coordinates import eci_to_ecef
-except ModuleNotFoundError:
-    from convert_coordinates import eci_to_ecef
+
+from astropy.time import Time
+from astropy.coordinates import ITRS, GCRS, CartesianRepresentation
+
+def eci_to_ecef(eci_coords, time_str):
+    t = Time(time_str, scale='utc')
+    # Format to ECI coordinates
+    eci_rep = CartesianRepresentation(eci_coords)
+    # Define GCRS coordinate (equivalent to ECI)
+    gcrs = GCRS(eci_rep, obstime=t)
+    # Convert GCRS to ITRS (equivalent to ECEF)
+    itrs = gcrs.transform_to(ITRS(obstime=t))
+
+    return [time_str, *itrs.cartesian.xyz.value]
 
 def query_ephemeris(object_id,start,end,step):
     
@@ -52,7 +65,6 @@ def query_ephemeris(object_id,start,end,step):
         + "&CSV_FORMAT=YES")
     
     response = requests.get(url)
-    print(response.url)
     if response.status_code == 200:
         response_text = (response.text
             [response.text.index('JDTDB,'):response.text.index('$$EOE')]
@@ -65,44 +77,52 @@ def query_ephemeris(object_id,start,end,step):
             + response_text[line_start+129:]
             ).replace(',\n','\n')
     else:
-        print(f"Error: {response.status_code}")
+        print(f"Error on {object_id}: {response.status_code}")
 
 def format_dates(df):
-     df['CalendarDate(TDB)'] = (
+    df['CalendarDate(TDB)'] = (
         pd.to_datetime(( # Trim characters that aren't in iso format
             df['CalendarDate(TDB)'].str[4:15]
             + ' '
             + df['CalendarDate(TDB)'].str[15:17]))
         .dt.strftime('%Y-%m-%d %H:%M:%S.000') # Final formatting
-        .astype(str))
+        .astype(str)
+    )
 
-def object_ephemeris(
+def build_object_ephemeris(
+        path='./Data',
         object_id='499',
         start='2024-01-01',
         end='2024-01-02',
-        step='1 h',
-        path=None):
-    
+        step='1 h'):
+    if not exists(path+'/EphemData'):
+        makedirs(path+'/EphemData')
+
     response_text = query_ephemeris(object_id,start,end,step)
     df = pd.read_csv(StringIO(response_text))[
         ['CalendarDate(TDB)','X','Y','Z']]
+    
     format_dates(df)
-    
-    ephem_array = np.array(dtype='object',object=list(map(
-        lambda row: eci_to_ecef(eci_coords=row[1:],time_str=row[0]),
-        df.to_numpy())))
-    
-    if path == None:
-        file_path = f"{object_id}_ephemerides.csv"
-    else:
-        file_path = path
+    ephem_array = np.array(
+        dtype='object',
+        object=list(map(
+            lambda row: eci_to_ecef(eci_coords=row[1:],time_str=row[0]),
+            df.to_numpy())))
+    # Saving
+    file_path = path+'/EphemData/'+object_id.replace(' ','_')+'_ephem.csv'
     pd.DataFrame(
         ephem_array,columns=['CalendarDate(TDB)','X','Y','Z']
         ).to_csv(file_path,index=False)
 
-if __name__ == '__main__':
-
-    planets = [
+def build_planets_ephems(
+        path='./Data',
+        start='2019-01-01',
+        end='2022-01-01',
+        step='6 h'):
+    if not exists(path+'/EphemData'):
+        makedirs(path+'/EphemData')
+    
+    planet_ids = [
         '10',
         'Mercury Barycenter',
         'Venus Barycenter',
@@ -113,13 +133,21 @@ if __name__ == '__main__':
         'Uranus Barycenter',
         'Neptune Barycenter'
     ]
-    for object in planets:
-        
-        object_ephemeris(
-            object_id=object,
-            start='2019-01-01',
-            end='2022-01-01',
-            step='6 h',
-            path=f'./Data/EphemData/{object.replace(" ","_")}_ephem.csv'
-        )
+    workers = []
+    for object_id in planet_ids:
+        kwargs = {
+            object_id:object_id,
+            start:start,
+            end:end,
+            step:step,
+            path:path
+        }
+        workers.append(Thread(target=build_object_ephemeris,kwargs=kwargs))
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+
+if __name__ == '__main__':
+    build_planets_ephems()
 

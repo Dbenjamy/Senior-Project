@@ -1,32 +1,46 @@
 import h3
-import dask
+from os.path import exists
+from os import makedirs
 
-def data_generator(parents, resolution=1):
+def h3_index_generator(parents, resolution=1):
     for parent in parents:
         for item in h3.h3_to_children(parent, resolution):
             index = str(item)
             lat, lon = [str(coord) for coord in h3.h3_to_geo(item)]
             yield ','.join((index,lat,lon))
 
-def save_data_in_chunks(parents, chunk_size=2000000, output_prefix='output'):
-    counter = 0
-    gen = data_generator(parents,resolution=3)
+def create_index_file(file_save_path,chunk_size,gen):
+    end = False
+    with open(file_save_path,'w') as file:
+        file.write('geo_code,lat,lon\n')
+        for _ in range(chunk_size):
+            try:
+                file.write(str(next(gen))+'\n')
+            except StopIteration:
+                end = True
+    return end
 
+def build_h3_index(
+        path='./Data',
+        resolution=3,
+        chunk_size=2000000,
+        output_prefix='output'):
+    
+    if not exists(path+'/h3Index'):
+        makedirs(path+'/h3Index')
+
+    parents = h3.get_res0_indexes()
+    gen = h3_index_generator(parents,resolution=resolution)
+    counter = 0
     while True:
-        end = False
-        with open(f"./Data/h3Index/{output_prefix}_{counter}.csv",
-                  'w') as file:
-            file.write('geo_code,lat,lon\n')
-            for _ in range(chunk_size):
-                try:
-                    file.write(str(next(gen))+'\n')
-                except StopIteration:
-                    end = True
-                    break
+        file_save_path = f"{path}/h3Index/{output_prefix}_{counter}.csv"
+        end = create_index_file(
+            file_save_path=file_save_path,
+            chunk_size=chunk_size,
+            gen=gen)
         if end:
             break
         counter += 1
 
-
-parents = h3.get_res0_indexes()  # Your list of parents
-save_data_in_chunks(parents,output_prefix='h3_index')
+if __name__ == '__main__':
+    build_h3_index(resolution=4,output_prefix='h3_index')
