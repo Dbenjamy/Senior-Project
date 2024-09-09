@@ -28,6 +28,7 @@ import requests
 import pandas as pd
 import numpy as np
 from threading import Thread
+from threading import Semaphore
 from os.path import exists
 from os import makedirs
 from io import StringIO
@@ -77,7 +78,7 @@ def query_ephemeris(object_id,start,end,step):
             + response_text[line_start+129:]
             ).replace(',\n','\n')
     else:
-        print(f"Error on {object_id}: {response.status_code}")
+        print(f"Error on {object_id}: {response.status_code}\n")
 
 def format_dates(df):
     df['CalendarDate(TDB)'] = (
@@ -94,13 +95,20 @@ def build_object_ephemeris(
         object_id='499',
         start='2024-01-01',
         end='2024-01-02',
-        step='1 h'):
-    if not exists(path+'/EphemData'):
-        makedirs(path+'/EphemData')
-
-    response_text = query_ephemeris(object_id,start,end,step)
-    df = pd.read_csv(StringIO(response_text))[
-        ['CalendarDate(TDB)','X','Y','Z']]
+        step='1 h',
+        limit=None):
+    if limit == None:
+        response_text = query_ephemeris(object_id,start,end,step)
+    else:
+        limit.acquire()
+        response_text = query_ephemeris(object_id,start,end,step)
+        limit.release()
+    
+    try:
+        df = pd.read_csv(StringIO(response_text))[
+            ['CalendarDate(TDB)','X','Y','Z']]
+    except pd.errors.EmptyDataError:
+        return
     
     format_dates(df)
     ephem_array = np.array(
@@ -108,6 +116,7 @@ def build_object_ephemeris(
         object=list(map(
             lambda row: eci_to_ecef(eci_coords=row[1:],time_str=row[0]),
             df.to_numpy())))
+
     # Saving
     file_path = path+'/EphemData/'+object_id.replace(' ','_')+'_ephem.csv'
     pd.DataFrame(
@@ -117,7 +126,7 @@ def build_object_ephemeris(
 def build_planets_ephems(
         path='./Data',
         start='2019-01-01',
-        end='2022-01-01',
+        end='2019-01-05',
         step='6 h'):
     if not exists(path+'/EphemData'):
         makedirs(path+'/EphemData')
@@ -134,13 +143,15 @@ def build_planets_ephems(
         'Neptune Barycenter'
     ]
     workers = []
+    limit = Semaphore(2) # Seems that only two queries allowed at once
     for object_id in planet_ids:
         kwargs = {
-            object_id:object_id,
-            start:start,
-            end:end,
-            step:step,
-            path:path
+            'object_id':object_id,
+            'start':start,
+            'end':end,
+            'step':step,
+            'path':path,
+            'limit':limit
         }
         workers.append(Thread(target=build_object_ephemeris,kwargs=kwargs))
     for worker in workers:
