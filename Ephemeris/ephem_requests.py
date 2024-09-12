@@ -125,28 +125,18 @@ def build_object_ephemeris(
 
 def build_planets_ephems(
         path='./Data',
+        object_ids:list = ['301'],
         start='2019-01-01',
         end='2019-01-05',
         step='6 h'):
     if not exists(path+'/EphemData'):
         makedirs(path+'/EphemData')
     
-    planet_ids = [
-        '10',
-        'Mercury Barycenter',
-        'Venus Barycenter',
-        '301', # Earth's moon
-        'Mars Barycenter',
-        'Jupiter Barycenter',
-        'Saturn Barycenter',
-        'Uranus Barycenter',
-        'Neptune Barycenter'
-    ]
     workers = []
     limit = Semaphore(2) # Seems that only two queries allowed at once
-    for object_id in planet_ids:
+    for obj_id in object_ids:
         kwargs = {
-            'object_id':object_id,
+            'object_id':obj_id,
             'start':start,
             'end':end,
             'step':step,

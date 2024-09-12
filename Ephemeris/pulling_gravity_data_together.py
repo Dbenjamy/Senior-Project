@@ -1,7 +1,4 @@
 
-from mpl_toolkits import mplot3d
-import matplotlib.pyplot as plt
-
 from astropy.constants import R_earth
 import pandas as pd
 import numpy as np
@@ -13,9 +10,23 @@ from dask.distributed import Client
 import dask
 import dask.bag as db
 import dask.multiprocessing
+
 G = 6.67430e-11
-def sum_ephemeris():
-    paths = glob.glob('./Data/EphemData/*.parquet')
+
+def magnitude(xyz):
+    return (xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5
+
+def gravity(distance,mass):
+    return G*mass/distance**2
+
+def scale_coord(coord,distance,scaler):
+    return [
+        coord[0]/distance*scaler,
+        coord[1]/distance*scaler,
+        coord[2]/distance*scaler]
+
+def sum_ephemeris(path):
+    paths = glob.glob(path+'/EphemData/*.parquet')
 
     final_df = dd.read_parquet(paths[0])
     gravity_dfs = []
@@ -32,25 +43,10 @@ def sum_ephemeris():
 
     grav_mag = magnitude(final_df[['gx','gy','gz']]).to_frame('grav_mag')
     final_df = dd.concat([final_df,grav_mag],axis=1)
-
-    print(final_df.head())
-    print(final_df['datetime'].max())
     rename(
-        './Data/EphemData/part.0.parquet',
-        './Data/EphemData/gravity_ephemeris.parquet')
+        path+'/EphemData/part.0.parquet',
+        path+'/EphemData/gravity_ephemeris.parquet')
 
-
-def magnitude(xyz):
-    return (xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5
-
-def gravity(distance,mass):
-    return G*mass/distance**2
-
-def scale_coord(coord,distance,scaler):
-    return [
-        coord[0]/distance*scaler,
-        coord[1]/distance*scaler,
-        coord[2]/distance*scaler]
 
 def relative_coords(coords, planet_tuple, mass):
     planet_data = [planet_tuple[1],planet_tuple[2],planet_tuple[3]]
@@ -58,7 +54,6 @@ def relative_coords(coords, planet_tuple, mass):
     grav_mag = gravity(mag,mass)
     relative_coords = scale_coord(coords,mag,grav_mag)
     return relative_coords
-
 
 def process_row(h3_data,planet_data):
     coords = np.array([h3_data['X'],h3_data['Y'],h3_data['Z']]).tolist()
@@ -72,6 +67,7 @@ def process_row(h3_data,planet_data):
         ]
     result = [*grav_coord,magnitude(grav_coord)]
     return result
+
 def process_partition(partition,date,planet_data):
     results = []
     for row in partition:
@@ -86,7 +82,6 @@ def process_partition(partition,date,planet_data):
     return results
 
 def generate_file(num,date,planet_data,h3_data_list):
-    
     bag = db.from_sequence(h3_data_list,npartitions=24)
     processed_partitions = bag.map_partitions(process_partition,date,planet_data)
 
@@ -96,12 +91,44 @@ def generate_file(num,date,planet_data,h3_data_list):
         .to_dataframe(columns=columns)
         .compute()
         .set_index('date'))
-    path = f'./Data/EphemData/EphemParquet/grav_ephem_{num}.parquet'
+    path = path+f'/EphemData/grav_ephem_{num}.parquet'
     results.to_parquet(path,engine='pyarrow')
 
-if __name__ == '__main__':
-
+def build_gravity_dataset(path,masses):
     client = Client(n_workers=12,threads_per_worker=2)
+    
+    h3_data = dd.read_csv(path+'/h3Index/h3_index_0.csv')
+    h3_data['X'] = R_earth * np.sin(h3_data['lat']) * np.cos(h3_data['lon'])
+    h3_data['Y'] = R_earth * np.sin(h3_data['lat']) * np.sin(h3_data['lon'])
+    h3_data['Z'] = R_earth * np.cos(h3_data['lat'])
+    h3_data_list = h3_data.compute().to_dict(orient='records')
+
+    ephems = [
+        [
+            pd.read_csv(
+                path
+                + f'/EphemData/{obj_id.replace(' ','_')}_ephem.csv')
+                [['X','Y','Z']]
+                .itertuples(),
+            mass
+        ]
+        for obj_id, mass in masses.items()]
+    first_file_name = '10_ephem.csv'
+    datetimes = pd.read_csv(path+f'/EphemData/{first_file_name}')['CalendarDate(TDB)']
+    
+    count = 1
+    for date in datetimes.to_list():
+        generate_file(
+            count,
+            date,
+            [(next(row[0]),row[1]) for row in ephems],
+            h3_data_list)
+        print(f'Completed {count}/{len(datetimes)}')
+        count += 1
+
+
+if __name__ == '__main__':
+    path = './Data'
     masses = {
         '10_ephem.csv':1.989e30,
         'Mercury_Barycenter_ephem.csv':3.285e23,
@@ -113,59 +140,8 @@ if __name__ == '__main__':
         'Uranus_Barycenter_ephem.csv':8.681e25,
         'Neptune_Barycenter_ephem.csv':1.024e26
     }
-
-
-    h3_data = dd.read_csv('./Data/h3Index/h3_index_0.csv')
-    h3_data['X'] = R_earth * np.sin(h3_data['lat']) * np.cos(h3_data['lon'])
-    h3_data['Y'] = R_earth * np.sin(h3_data['lat']) * np.sin(h3_data['lon'])
-    h3_data['Z'] = R_earth * np.cos(h3_data['lat'])
-    h3_data_list = h3_data.compute().to_dict(orient='records')
-
-    ephems = [
-        [
-            pd.read_csv(f'./Data/EphemData/{file}')[['X','Y','Z']].itertuples(),
-            mass
-        ]
-        for file, mass in masses.items()]
-    first_file_name = '10_ephem.csv'
-    datetimes = pd.read_csv(f'./Data/EphemData/{first_file_name}')['CalendarDate(TDB)']
-
-    count = 0
-    for date in datetimes.to_list():
-        generate_file(
-            count,
-            date,
-            [(next(row[0]),row[1]) for row in ephems],
-            h3_data_list)
-        print(f'Completed {count}/{len(datetimes)}')
-        count += 1
-        
-
-
-
-
-
-#    for data_path in glob.glob('./Data/EphemData/*.csv'):
-#        key = data_path[len('./Data/EphemData/'):]
-#        mass = masses[key]
-#        logger.info(f'Starting prcessing for {key}')
-#        compute_and_save_object_ephem(data_path, mass)
-#        logger.info(f'{key[:4]} complete')
-#        rename(
-#             './Data/EphemData/part.0.parquet',
-#             f'./Data/EphemData/{key[:-4]}.parquet')
-#        break
-#    df = pd.read_csv('./Data/EphemData/10_ephem.csv')
-    # print(df.tail())
-    # print(len(df))
-#    print(df['datetime'].unique())
+    build_gravity_dataset(path=path,masses=masses)
     
-    # sum_ephemeris()
-    
-    # df = pd.read_parquet('./Data/EphemData/10_ephem.parquet')
-    # print(len(df))
-    # print(df.head())
-    # print(df['datetime'].max())
     # create_3d_plot(df)
 
     
