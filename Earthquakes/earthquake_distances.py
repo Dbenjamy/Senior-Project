@@ -2,8 +2,6 @@
 import dask.dataframe as dd
 from astropy.constants import R_earth
 import numpy as np
-from math import isinf
-from time import time
 
 def magnitude(xyz_dataframe):
     return np.sqrt(
@@ -12,7 +10,7 @@ def magnitude(xyz_dataframe):
         + np.square(xyz_dataframe['Z'])
         )
 
-# On a small sample (less than 217 probably), the shortest distance between 
+# On a small sample (less than 217), the shortest distance between 
 # any two points is 17.69 km. There are 531484 earthquake observations. For
 # now I'll use resolution 4 in h3, but 5 seems more appropriate.
 def calculate_distance():
@@ -49,6 +47,7 @@ def calculate_distance():
         pass
 
     print(min_dist)
-calculate_distance()
+if __name__ == '__main__':
+    calculate_distance()
 
 
