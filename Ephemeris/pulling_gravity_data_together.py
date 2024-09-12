@@ -72,8 +72,8 @@ def process_partition(partition,date,planet_data):
     results = []
     for row in partition:
         results.append([
-            str(date),
             row['geo_code'],
+            str(date),
             row['X'],
             row['Y'],
             row['Z'],
@@ -81,7 +81,7 @@ def process_partition(partition,date,planet_data):
         ])
     return results
 
-def generate_file(num,date,planet_data,h3_data_list):
+def generate_file(path,num,date,planet_data,h3_data_list):
     bag = db.from_sequence(h3_data_list,npartitions=24)
     processed_partitions = bag.map_partitions(process_partition,date,planet_data)
 
@@ -91,8 +91,8 @@ def generate_file(num,date,planet_data,h3_data_list):
         .to_dataframe(columns=columns)
         .compute()
         .set_index('date'))
-    path = path+f'/EphemData/grav_ephem_{num}.parquet'
-    results.to_parquet(path,engine='pyarrow')
+    data_path = path+f'/EphemData/grav_ephem_{num}.parquet'
+    results.to_parquet(data_path,engine='pyarrow')
 
 def build_gravity_dataset(path,masses):
     client = Client(n_workers=12,threads_per_worker=2)
@@ -106,19 +106,26 @@ def build_gravity_dataset(path,masses):
     ephems = [
         [
             pd.read_csv(
-                path
-                + f'/EphemData/{obj_id.replace(' ','_')}_ephem.csv')
+                    path
+                    + '/EphemData/'
+                    + obj_id.replace(' ','_')
+                    + '_ephem.csv')
                 [['X','Y','Z']]
                 .itertuples(),
             mass
-        ]
-        for obj_id, mass in masses.items()]
-    first_file_name = '10_ephem.csv'
-    datetimes = pd.read_csv(path+f'/EphemData/{first_file_name}')['CalendarDate(TDB)']
+        ] for obj_id, mass in masses.items()]
+    # Getting dates from file to iterate later
+    file_name = list(masses.keys())[0].replace(' ','_') + '_ephem.csv'
+    datetimes = (
+        pd.read_csv(
+            path + f'/EphemData/{file_name}')
+        ['CalendarDate(TDB)']
+        .to_list())
     
     count = 1
-    for date in datetimes.to_list():
+    for date in datetimes:
         generate_file(
+            path,
             count,
             date,
             [(next(row[0]),row[1]) for row in ephems],
@@ -130,15 +137,15 @@ def build_gravity_dataset(path,masses):
 if __name__ == '__main__':
     path = './Data'
     masses = {
-        '10_ephem.csv':1.989e30,
-        'Mercury_Barycenter_ephem.csv':3.285e23,
-        'Venus_Barycenter_ephem.csv':4.867e24,
-        '301_ephem.csv':7.347e22,
-        'Mars_Barycenter_ephem.csv': 6.39e23,
-        'Jupiter_Barycenter_ephem.csv':1.898e27,
-        'Saturn_Barycenter_ephem.csv':5.683e26,
-        'Uranus_Barycenter_ephem.csv':8.681e25,
-        'Neptune_Barycenter_ephem.csv':1.024e26
+        '10':1.989e30,
+        'Mercury Barycenter':3.285e23,
+        'Venus Barycenter':4.867e24,
+        '301':7.347e22,
+        'Mars Barycenter': 6.39e23,
+        'Jupiter Barycenter':1.898e27,
+        'Saturn Barycenter':5.683e26,
+        'Uranus Barycenter':8.681e25,
+        'Neptune Barycenter':1.024e26
     }
     build_gravity_dataset(path=path,masses=masses)
     
