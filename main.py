@@ -1,7 +1,7 @@
 from Earthquakes.earthquake_history import pull_earthquake_data, format_earthquake_data
 from DataStructure.h3_data_structure import build_h3_index
 from Ephemeris.ephem_requests import build_planets_ephems
-from Ephemeris.pulling_gravity_data_together import build_gravity_dataset
+from Ephemeris.numpy_gravity_data import build_gravity_dataset
 from dask import dataframe as dd
 
 if __name__ == '__main__':

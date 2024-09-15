@@ -40,9 +40,6 @@ def calculate_distance():
                 if counter.is_integer():
                     print(f'%{round(counter)}')
                 continue
-                
-                # print(len(coord_ddf)*(time() - start)/60/60)
-                # break
     except ValueError:
         pass
 
