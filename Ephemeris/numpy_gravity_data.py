@@ -8,156 +8,179 @@ from time import sleep
 from os.path import exists
 from os import makedirs
 
-G = 6.67430e-11
+class Worker(mp.Process):
+    def __init__(self,work_queue,write_queue):
+        super().__init__()
+        self.work_queue = work_queue
+        self.write_queue = write_queue
+        self.GRAVITY = 6.67430e-11
 
-def magnitude(xyz):
-    return (xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5
+    def run(self):
+        while True:
+            results = []
+            task = self.work_queue.get()
+            if task == None:
+                self.work_queue.put(None)
+                break
 
-def gravity(distance,mass):
-    return G*mass/distance**2
+            num, date, h3_data, ephems = task
+            for row in h3_data:
+                results.append([
+                    row[0],
+                    date,
+                    row[1],
+                    row[2],
+                    row[3],
+                    *self.process_row(row[1:],ephems)
+                ])
+            self.write_queue.put((num,np.asarray(results)))
 
-def scale_coord(coord,distance,scaler):
-    return [
-        coord[0]/distance*scaler,
-        coord[1]/distance*scaler,
-        coord[2]/distance*scaler]
-
-def relative_coords(coords, planet, mass):
-    mag = magnitude(planet)
-    grav_mag = gravity(mag,mass)
-    relative_coords = scale_coord(coords,mag,grav_mag)
-    return relative_coords
-
-def process_row(h3_coord,ephems):
-    grav_coord = [0.0,0.0,0.0]
-    
-    for planet, mass in ephems:
-        rel_coords = relative_coords(h3_coord, planet, mass)
-        grav_coord = [
-            grav_coord[0] + rel_coords[0],
-            grav_coord[1] + rel_coords[1],
-            grav_coord[2] + rel_coords[2]
-        ]
-    result = [*grav_coord,magnitude(grav_coord)]
-    return result
-
-def gravity_from_date(work_queue,write_queue):
-    while True:
-        results = []
-        task = work_queue.get()
-        if task == None:
-            work_queue.put(None)
-            break
-
-        num, date, h3_data, ephems = task
-        for row in h3_data:
-            results.append([
-                row[0],
-                date,
-                row[1],
-                row[2],
-                row[3],
-                *process_row(row[1:],ephems)
-            ])
-        # columns = ['geo_code','date','X','Y','Z','gx','gy','gz','grav_mag']
-        write_queue.put((num,np.asarray(results)))
-
-def work_scheduler(path,dates,masses,work_queue,write_queue):
-    h3_data = np.column_stack(
-        [col.to_numpy() for col in
-            pq.read_table(path+'/h3Index/').columns])
-    ephem_path = path+'/EphemData/{}_ephem.csv'
-    ephems = []
-    for obj_id, mass in masses.items():
-        planet_path = ephem_path.format(obj_id.replace(' ','_'))
-        planet_array = csv_to_numpy(planet_path)
-        ephems.append((planet_array,mass))
-    
-    for i, date in enumerate(dates):
-        filtered = []
+    def process_row(self,h3_coord,ephems):
+        grav_coord = [0.0,0.0,0.0]
+        
         for planet, mass in ephems:
-            planet_filtered = planet[planet[:,0]==date][:,1:][0]
-            filtered.append((planet_filtered,mass))
-        work_queue.put((i,date,h3_data,filtered))
-    while True:
-        if work_queue.empty() and write_queue.empty():
-            work_queue.put(None)
-            break
-        sleep(1)
+            rel_coords = self.relative_coords(h3_coord, planet, mass)
+            grav_coord = [
+                grav_coord[0] + rel_coords[0],
+                grav_coord[1] + rel_coords[1],
+                grav_coord[2] + rel_coords[2]
+            ]
+        result = [*grav_coord,self.magnitude(grav_coord)]
+        return result
 
-def write_parquet(path,array:np.ndarray):
-    table = pa.table({
-        'geo_code':array[:,0],
-        'date':array[:,1],
-        'X':array[:,2].astype(dtype='d'),
-        'Y':array[:,3].astype(dtype='d'),
-        'Z':array[:,4].astype(dtype='d'),
-        'gx':array[:,5].astype(dtype='d'),
-        'gy':array[:,6].astype(dtype='d'),
-        'gz':array[:,7].astype(dtype='d'),
-        'grav_mag':array[:,8].astype(dtype='d')
-    })
-    pq.write_table(table,path)
+    def relative_coords(self,coords, planet, mass):
+        mag = self.magnitude(planet)
+        grav_mag = self.gravity(mag,mass)
+        relative_coords = self.scale_coord(coords,mag,grav_mag)
+        return relative_coords
 
-def save_partitions(path,write_queue,chunk_size:int):
-    order_num, start_array = write_queue.get()
-    assert type(start_array) == np.ndarray
-    array_list = [np.copy(start_array)]
+    def magnitude(self,xyz):
+        return (xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5
 
-    data_path = path+'/GravityData/'
-    if not exists(data_path):
-        makedirs(data_path)
-    save_path = data_path+'gravity_{}.parquet'
+    def gravity(self,distance,mass):
+        return self.GRAVITY*mass/distance**2
 
-    stats = {
-        'local_total':len(start_array),
-        'part_num':1,
-        'chunk_size':chunk_size,
-        'path':save_path,
-    }
-    del start_array
-    completed_dict = dict()
-    while True:
-        task = write_queue.get()
-        if task == None:
-            break
-        order_num, array = task
-        completed_dict[order_num] = array
-        save_checks(stats,completed_dict,array_list)
-    while not completed_dict:
-        save_checks(stats,completed_dict)
-    
-    if len(array_list) > 0:
-        full_array = np.concatenate(array_list,axis=0)
-        write_parquet(save_path.format(stats['part_num']),full_array)
+    def scale_coord(self,coord,distance,scaler):
+        return [
+            coord[0]/distance*scaler,
+            coord[1]/distance*scaler,
+            coord[2]/distance*scaler]
 
-def save_checks(stats,completed_dict,array_list):
-    if stats['part_num'] in completed_dict:
-        next_array = completed_dict[stats['part_num']]
-        if stats['local_total'] + len(next_array) > stats['chunk_size']:
-            full_array = np.concat(array_list,axis=0)
-            write_parquet(stats['path'].format(stats['part_num']),full_array)
-            print(f'Completed {stats['part_num']}')
-            stats['local_total'] = len(next_array)
-            array_list = [next_array]
-            del completed_dict[stats['part_num']]
-            stats['part_num'] += 1
-        else:
-            stats['local_total'] += len(next_array)
-            array_list.append(next_array)
-            del completed_dict[stats['part_num']]
+class Director(mp.Process):
+    def __init__(self,path,datetimes,masses,work_queue,write_queue):
+        super().__init__()
+        self.path = path
+        self.datetimes = datetimes
+        self.masses = masses
+        self.work_queue = work_queue
+        self.write_queue = write_queue
 
-def csv_to_numpy(full_path):
-    with open(full_path,'r') as file:
-        data_gen = csv.reader(file,delimiter=',')
-        next(data_gen)
-        data = [[
-                datetime.strptime(row[0][:-4],'%Y-%m-%d %H:%M:%S'),
-                float(row[1]),
-                float(row[2]),
-                float(row[3])]
-            for row in data_gen]
-        return np.asarray(data)
+    def run(self):
+        h3_data = np.column_stack(
+            [col.to_numpy() for col in
+                pq.read_table(self.path+'/h3Index/').columns])
+        ephem_path = self.path+'/EphemData/{}_ephem.csv'
+        ephems = []
+        for obj_id, mass in self.masses.items():
+            planet_path = ephem_path.format(obj_id.replace(' ','_'))
+            planet_array = self.csv_to_numpy(planet_path)
+            ephems.append((planet_array,mass))
+
+        for i, date in enumerate(self.datetimes):
+            filtered = []
+            for planet, mass in ephems:
+                planet_filtered = planet[planet[:,0]==date][:,1:][0]
+                filtered.append((planet_filtered,mass))
+            self.work_queue.put((i,date,h3_data,filtered))
+        while True:
+            if self.work_queue.empty() and self.write_queue.empty():
+                self.work_queue.put(None)
+                break
+            sleep(0.1)
+
+    def csv_to_numpy(self,full_path):
+        with open(full_path,'r') as file:
+            data_gen = csv.reader(file,delimiter=',')
+            next(data_gen)
+            data = [[
+                    datetime.strptime(row[0][:-4],'%Y-%m-%d %H:%M:%S'),
+                    float(row[1]),
+                    float(row[2]),
+                    float(row[3])]
+                for row in data_gen]
+            return np.asarray(data)
+
+class Writer(mp.Process):
+    def __init__(self,path,write_queue,chunk_size):
+        super().__init__()
+        self.path = path
+        self.write_queue = write_queue
+        self.chunk_size = chunk_size
+
+    def run(self):
+        order_num, start_array = self.write_queue.get()
+        array_list = [np.copy(start_array)]
+
+        data_path = self.path+'/GravityData/'
+        if not exists(data_path):
+            makedirs(data_path)
+        save_path = data_path+'gravity_{}.parquet'
+        stats = {
+            'local_total':len(start_array),
+            'part_num':0,
+            'chunk_size':self.chunk_size,
+            'path':save_path,
+        }
+        del start_array
+        completed_dict = dict()
+
+        while True:
+            task = self.write_queue.get()
+            if task == None:
+                break
+            order_num, array = task
+            completed_dict[order_num] = array
+            self.save_checks(stats,completed_dict,array_list)
+        while not completed_dict:
+            self.save_checks(stats,completed_dict)
+
+        if len(array_list) > 0:
+            full_array = np.concatenate(array_list,axis=0)
+            self.write_parquet(save_path,stats['part_num'],full_array)
+
+    def save_checks(self,stats,completed_dict,array_list):
+        if stats['part_num'] in completed_dict:
+            next_array = completed_dict[stats['part_num']]
+            if stats['local_total'] + len(next_array) > stats['chunk_size']:
+                full_array = np.concat(array_list,axis=0)
+                self.write_parquet(
+                    stats['path'],
+                    stats['part_num'],
+                    full_array)
+                print(f'Completed {stats['part_num']}')
+                stats['local_total'] = len(next_array)
+                array_list = [next_array]
+                del completed_dict[stats['part_num']]
+                stats['part_num'] += 1
+            else:
+                stats['local_total'] += len(next_array)
+                array_list.append(next_array)
+                del completed_dict[stats['part_num']]
+
+    def write_parquet(self,path,num,array:np.ndarray):
+        table = pa.table({
+            'geo_code':array[:,0],
+            'datetime':array[:,1],
+            'X':array[:,2].astype(dtype='d'),
+            'Y':array[:,3].astype(dtype='d'),
+            'Z':array[:,4].astype(dtype='d'),
+            'gx':array[:,5].astype(dtype='d'),
+            'gy':array[:,6].astype(dtype='d'),
+            'gz':array[:,7].astype(dtype='d'),
+            'grav_mag':array[:,8].astype(dtype='d')
+        })
+        pq.write_table(table,path.format(num))
+        print(f'Completed: {num}')
 
 def build_gravity_dataset(path,masses):
     # Getting dates from file to iterate later
@@ -175,17 +198,20 @@ def build_gravity_dataset(path,masses):
     write_queue = mp.Manager().Queue()
     workers = []
     for _ in range(mp.cpu_count()-1):
-        workers.append(
-            mp.Process(
-                target=gravity_from_date,
-                args=(work_queue,write_queue))
-        )
-    director = mp.Process(target=work_scheduler,args=(path,datetimes,masses,work_queue,write_queue))
-    writer = mp.Process(target=save_partitions,args=(path,write_queue,30e6))
+        workers.append(Worker(
+            work_queue=work_queue,
+            write_queue=write_queue))
+    director = Director(
+        path=path,
+        datetimes=datetimes,
+        masses=masses,
+        work_queue=work_queue,
+        write_queue=write_queue)
+    writer = Writer(path=path,write_queue=write_queue,chunk_size=30e6)
+
     for worker in workers: worker.start()
     writer.start()
     director.start()
-    
     for worker in workers: worker.join()
     director.join()
     write_queue.put(None)
@@ -207,9 +233,10 @@ if __name__ == '__main__':
     }
     build_gravity_dataset(path=path,masses=masses)
     import dask.dataframe as dd
-    print(dd.read_parquet('./Data/GravityData/').head())
+    ddf = dd.read_parquet('./Data/GravityData/')
+    print(ddf.head())
 
-    
-    # create_3d_plot(df)
+    # from graphing_data import create_3d_plot
+    # create_3d_plot(ddf)
 
     
