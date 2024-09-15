@@ -53,7 +53,7 @@ def gravity_from_date(work_queue,write_queue):
         for row in h3_data:
             results.append([
                 row[0],
-                str(date),
+                date,
                 row[1],
                 row[2],
                 row[3],
@@ -89,13 +89,13 @@ def write_parquet(path,array:np.ndarray):
     table = pa.table({
         'geo_code':array[:,0],
         'date':array[:,1],
-        'X':array[:,2],
-        'Y':array[:,3],
-        'Z':array[:,4],
-        'gx':array[:,5],
-        'gy':array[:,6],
-        'gz':array[:,7],
-        'grav_mag':array[:,8]
+        'X':array[:,2].astype(dtype='d'),
+        'Y':array[:,3].astype(dtype='d'),
+        'Z':array[:,4].astype(dtype='d'),
+        'gx':array[:,5].astype(dtype='d'),
+        'gy':array[:,6].astype(dtype='d'),
+        'gz':array[:,7].astype(dtype='d'),
+        'grav_mag':array[:,8].astype(dtype='d')
     })
     pq.write_table(table,path)
 
@@ -207,7 +207,7 @@ if __name__ == '__main__':
     }
     build_gravity_dataset(path=path,masses=masses)
     import dask.dataframe as dd
-    print(dd.read_parquet('./Data/GravityData/'))
+    print(dd.read_parquet('./Data/GravityData/').head())
 
     
     # create_3d_plot(df)
