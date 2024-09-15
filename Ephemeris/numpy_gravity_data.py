@@ -1,10 +1,10 @@
-
 import csv
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from datetime import datetime
 import multiprocessing as mp
+from time import sleep
 from os.path import exists
 from os import makedirs
 
@@ -41,47 +41,28 @@ def process_row(h3_coord,ephems):
     result = [*grav_coord,magnitude(grav_coord)]
     return result
 
-def process_partition(partition,date,planet_data):
-    results = []
-    for row in partition:
-        results.append([
-            row['geo_code'],
-            str(date),
-            row['X'],
-            row['Y'],
-            row['Z'],
-            *process_row(row, planet_data)
-        ])
-    return results
+def gravity_from_date(work_queue,write_queue):
+    while True:
+        results = []
+        task = work_queue.get()
+        if task == None:
+            work_queue.put(None)
+            break
 
-def gravity_from_date(date,request_queue):
-    results = []
-    data_send, data_recieve = mp.Pipe()
-    request_queue.put((date,data_send))
-    h3_data, ephems = data_recieve.recv()
-    for row in h3_data:
-        results.append([
-            row[0],
-            str(date),
-            row[1],
-            row[2],
-            row[3],
-            *process_row(row[1:],ephems)
-        ])
-    # columns = ['geo_code','date','X','Y','Z','gx','gy','gz','grav_mag']
-    return np.asarray(results)
+        num, date, h3_data, ephems = task
+        for row in h3_data:
+            results.append([
+                row[0],
+                str(date),
+                row[1],
+                row[2],
+                row[3],
+                *process_row(row[1:],ephems)
+            ])
+        # columns = ['geo_code','date','X','Y','Z','gx','gy','gz','grav_mag']
+        write_queue.put((num,np.asarray(results)))
 
-
-def big_data_scheduler(iterator,request_queue,completed_queue):
-    schedule = []
-    schedule.append((iterator[0],request_queue,completed_queue,0))
-    order_num = 1
-    for item in iterator[0:]:
-        schedule.append((item,request_queue,completed_queue,order_num))
-        order_num += 1
-    return schedule
-
-def data_transmitter(path,masses,request_queue):
+def work_scheduler(path,dates,masses,work_queue,write_queue):
     h3_data = np.column_stack(
         [col.to_numpy() for col in
             pq.read_table(path+'/h3Index/').columns])
@@ -91,24 +72,20 @@ def data_transmitter(path,masses,request_queue):
         planet_path = ephem_path.format(obj_id.replace(' ','_'))
         planet_array = csv_to_numpy(planet_path)
         ephems.append((planet_array,mass))
-    while True:
-        date, response = request_queue.get()
+    
+    for i, date in enumerate(dates):
         filtered = []
         for planet, mass in ephems:
             planet_filtered = planet[planet[:,0]==date][:,1:][0]
             filtered.append((planet_filtered,mass))
-        print(filtered[0][0])
-        response.send((h3_data,filtered))
+        work_queue.put((i,date,h3_data,filtered))
+    while True:
+        if work_queue.empty() and write_queue.empty():
+            work_queue.put(None)
+            break
+        sleep(1)
 
-def worker(task):
-    date, request_queue, completed_queue, order_num = task
-    array = gravity_from_date(date, request_queue)
-    completed_queue.put((order_num,array))
-    #
-    # Get rid of worker and change gravity
-    # 
-
-def write_table(path,array:np.ndarray):
+def write_parquet(path,array:np.ndarray):
     table = pa.table({
         'geo_code':array[:,0],
         'date':array[:,1],
@@ -120,10 +97,10 @@ def write_table(path,array:np.ndarray):
         'gz':array[:,7],
         'grav_mag':array[:,8]
     })
-    pa.write_table(table,path)
+    pq.write_table(table,path)
 
-def save_partitions(path,completed_queue,chunk_size:int):
-    order_num, start_array = completed_queue.get()
+def save_partitions(path,write_queue,chunk_size:int):
+    order_num, start_array = write_queue.get()
     assert type(start_array) == np.ndarray
     array_list = [np.copy(start_array)]
 
@@ -140,27 +117,26 @@ def save_partitions(path,completed_queue,chunk_size:int):
     }
     del start_array
     completed_dict = dict()
-
     while True:
-        order_num, array = completed_queue.get()
-        if type(array) != np.ndarray and array == 'stop':
+        task = write_queue.get()
+        if task == None:
             break
+        order_num, array = task
         completed_dict[order_num] = array
         save_checks(stats,completed_dict,array_list)
-
     while not completed_dict:
         save_checks(stats,completed_dict)
     
     if len(array_list) > 0:
-        full_array = np.concat(array_list,axis=0)
-        write_table(save_path.format(stats['part_num']),full_array)
+        full_array = np.concatenate(array_list,axis=0)
+        write_parquet(save_path.format(stats['part_num']),full_array)
 
 def save_checks(stats,completed_dict,array_list):
     if stats['part_num'] in completed_dict:
         next_array = completed_dict[stats['part_num']]
         if stats['local_total'] + len(next_array) > stats['chunk_size']:
             full_array = np.concat(array_list,axis=0)
-            write_table(stats['path'].format(stats['part_num']),full_array)
+            write_parquet(stats['path'].format(stats['part_num']),full_array)
             print(f'Completed {stats['part_num']}')
             stats['local_total'] = len(next_array)
             array_list = [next_array]
@@ -181,9 +157,7 @@ def csv_to_numpy(full_path):
                 float(row[2]),
                 float(row[3])]
             for row in data_gen]
-        
         return np.asarray(data)
-
 
 def build_gravity_dataset(path,masses):
     # Getting dates from file to iterate later
@@ -197,15 +171,25 @@ def build_gravity_dataset(path,masses):
             [datetime.strptime(row[0][:-4],'%Y-%m-%d %H:%M:%S')
             for row in data_gen])
 
-    request_queue = mp.Manager().Queue()
-    completed_queue = mp.Manager().Queue()
-    schedule = [task for task in big_data_scheduler(datetimes,request_queue,completed_queue)]
-    data_process = mp.Process(target=data_transmitter,args=(path,masses,request_queue))
-    main = mp.Process(target=save_partitions,args=(path,completed_queue,30e6))
-    data_process.start()
-    main.start()
-    with mp.Pool(mp.cpu_count()) as pool:
-        pool.map(worker,schedule)
+    work_queue = mp.Manager().Queue()
+    write_queue = mp.Manager().Queue()
+    workers = []
+    for _ in range(mp.cpu_count()-1):
+        workers.append(
+            mp.Process(
+                target=gravity_from_date,
+                args=(work_queue,write_queue))
+        )
+    director = mp.Process(target=work_scheduler,args=(path,datetimes,masses,work_queue,write_queue))
+    writer = mp.Process(target=save_partitions,args=(path,write_queue,30e6))
+    for worker in workers: worker.start()
+    writer.start()
+    director.start()
+    
+    for worker in workers: worker.join()
+    director.join()
+    write_queue.put(None)
+    writer.join()
 
 
 if __name__ == '__main__':
@@ -222,6 +206,9 @@ if __name__ == '__main__':
         'Neptune Barycenter':1.024e26
     }
     build_gravity_dataset(path=path,masses=masses)
+    import dask.dataframe as dd
+    print(dd.read_parquet('./Data/GravityData/'))
+
     
     # create_3d_plot(df)
 
