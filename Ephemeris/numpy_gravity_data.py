@@ -94,11 +94,12 @@ class Worker(mp.Process):
         result = [*grav_coord,self.magnitude(grav_coord)]
         return result
 
-    def relative_coords(self,coords, planet, mass):
-        mag = self.magnitude(planet)
+    def relative_coords(self,coord, planet, mass):
+        relative_coords = planet - coord
+        mag = self.magnitude(relative_coords)
         grav_mag = self.gravity(mag,mass)
-        relative_coords = self.scale_coord(coords,mag,grav_mag)
-        return relative_coords
+        grav_coord = self.scale_coord(relative_coords,mag,grav_mag)
+        return grav_coord
 
     def magnitude(self,xyz):
         return (xyz[0]**2 + xyz[1]**2 + xyz[2]**2)**0.5
@@ -152,7 +153,7 @@ class Writer(mp.Process):
         if stats['array_num'] in completed_dict:
             next_array = completed_dict[stats['array_num']]
             if stats['local_total'] + len(next_array) > stats['chunk_size']:
-                full_array = np.concat(array_list,axis=0)
+                full_array = np.concatenate(array_list,axis=0)
                 self.write_parquet(
                     stats['path'],
                     stats['part_num'],
@@ -223,7 +224,7 @@ if __name__ == '__main__':
         '10':1.989e30,
         'Mercury Barycenter':3.285e23,
         'Venus Barycenter':4.867e24,
-        '301':7.347e22,
+        '301':7.347e22, # Earth's moon
         'Mars Barycenter': 6.39e23,
         'Jupiter Barycenter':1.898e27,
         'Saturn Barycenter':5.683e26,
@@ -231,9 +232,9 @@ if __name__ == '__main__':
         'Neptune Barycenter':1.024e26
     }
     build_gravity_dataset(path=path,masses=masses)
-    # import pandas as pd
-    # ddf = pd.read_parquet('./Data/GravityData/')
-    # from graphing_data import create_3d_plot
-    # create_3d_plot(ddf)
+    import pandas as pd
+    ddf = pd.read_parquet('./Data/GravityData/')
+    from graphing_data import create_3d_plot
+    create_3d_plot(ddf)
 
     

@@ -1,28 +1,24 @@
 import plotly.graph_objs as go
 
 def create_3d_plot(df):
-
-    # Reset index to make it easier to work with
-    df_reset = df.reset_index()
-
     # Create a dictionary to store grav_mag values by location and time
     location_dict = {}
-    for _, row in df_reset.iterrows():
+    for _, row in df.iterrows():
         loc = (row['X'], row['Y'], row['Z'])
         if loc not in location_dict:
             location_dict[loc] = {}
         location_dict[loc][row['datetime']] = row['grav_mag']
-    
+
     fig = go.Figure()
 
     # Get unique locations and initial colors
     locations = list(location_dict.keys())
-    initial_colors = [location_dict[loc][df_reset['datetime'].unique()[0]] for loc in locations]
+    initial_colors = [location_dict[loc][df['datetime'].unique()[0]] for loc in locations]
 
     scatter = go.Scatter3d(
-        x=[loc[0] for loc in locations],
-        y=[loc[1] for loc in locations],
-        z=[loc[2] for loc in locations],
+        x = [loc[0] for loc in locations],
+        y = [loc[1] for loc in locations],
+        z = [loc[2] for loc in locations],
         mode='markers',
         marker=dict(
             size=5,
@@ -37,7 +33,7 @@ def create_3d_plot(df):
 
     # Add slider steps
     steps = []
-    for time in df_reset['datetime'].unique():
+    for time in df['datetime'].unique():
         step_colors = [location_dict[loc][time] for loc in locations]
         step = dict(
             method='restyle',
