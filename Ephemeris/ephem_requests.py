@@ -95,7 +95,7 @@ def build_object_ephemeris(
         object_id='499',
         start='2024-01-01',
         end='2024-01-02',
-        step='1 h',
+        step='6 h',
         limit=None):
     if limit == None:
         response_text = query_ephemeris(object_id,start,end,step)
@@ -150,5 +150,16 @@ def build_planets_ephems(
         worker.join()
 
 if __name__ == '__main__':
-    build_planets_ephems()
+    objects_and_masses = {
+        '10':1.989e30,
+        'Mercury Barycenter':3.285e23,
+        'Venus Barycenter':4.867e24,
+        '301':7.347e22, # Earth's moon
+        'Mars Barycenter': 6.39e23,
+        'Jupiter Barycenter':1.898e27,
+        'Saturn Barycenter':5.683e26,
+        'Uranus Barycenter':8.681e25,
+        'Neptune Barycenter':1.024e26
+    }
+    build_planets_ephems(object_ids=objects_and_masses.keys())
 
