@@ -26,6 +26,3 @@ if __name__ == '__main__':
     build_planets_ephems(path=data_path,object_ids=objects_and_masses.keys())
     build_gravity_dataset(path=data_path,masses=objects_and_masses)
     print(dd.read_parquet(data_path+'/EphemData/').head())
-
-
-# pull_earthquake_data(starttime='2019-01-01 00:00:00',endtime='2019-01-02 00:00:00',test=True)
