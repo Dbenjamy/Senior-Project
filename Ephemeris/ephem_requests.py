@@ -32,6 +32,7 @@ from threading import Semaphore
 from os.path import exists
 from os import makedirs
 from io import StringIO
+import sys
 
 from astropy.time import Time
 from astropy.coordinates import ITRS, GCRS, CartesianRepresentation
@@ -64,7 +65,7 @@ def query_ephemeris(object_id,start,end,step):
         + f"&STEP_SIZE='{step}'"
         + "&OUT_UNITS='KM-S'"
         + "&CSV_FORMAT=YES")
-    
+    print(f'Querying data for: {object_id}',flush=True)
     response = requests.get(url)
     if response.status_code == 200:
         response_text = (response.text
@@ -78,7 +79,7 @@ def query_ephemeris(object_id,start,end,step):
             + response_text[line_start+129:]
             ).replace(',\n','\n')
     else:
-        print(f"Error on {object_id}: {response.status_code}\n")
+        print(f"Error on {object_id}: {response.status_code}\n",flush=True)
 
 def format_dates(df):
     df['CalendarDate(TDB)'] = (
@@ -102,14 +103,14 @@ def build_object_ephemeris(
     else:
         limit.acquire()
         response_text = query_ephemeris(object_id,start,end,step)
-        limit.release()
     
     try:
         df = pd.read_csv(StringIO(response_text))[
             ['CalendarDate(TDB)','X','Y','Z']]
     except pd.errors.EmptyDataError:
+        if limit != None: limit.release()
         return
-    
+
     format_dates(df)
     ephem_array = np.array(
         dtype='object',
@@ -122,6 +123,7 @@ def build_object_ephemeris(
     pd.DataFrame(
         ephem_array,columns=['CalendarDate(TDB)','X','Y','Z']
         ).to_csv(file_path,index=False)
+    if limit != None: limit.release()
 
 def build_planets_ephems(
         path='./Data',

@@ -53,7 +53,7 @@ class EarthquakeQuery(threading.Thread):
                     (start_date_time,end_date_time))
                 self.list_lock.release()
         else:
-            print(f'Failure on query range {start_date_time} - {end_date_time}.')
+            print(f'Failure on query range {start_date_time} - {end_date_time}.',flush=True)
 
 def query(start_date_time,end_date_time,query_type='query'):
     if query_type == 'count':
