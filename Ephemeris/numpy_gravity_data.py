@@ -114,11 +114,14 @@ class Worker(mp.Process):
             coord[2]/distance*scaler]
 
 class Writer(mp.Process):
-    def __init__(self,path,write_queue,chunk_size):
+    def __init__(self,path,write_queue,chunk_size,output_length=None):
         super().__init__()
         self.path = path
         self.write_queue = write_queue
         self.chunk_size = chunk_size
+        self.output_length = output_length
+        if type(self.output_length) == int:
+            self.part_count = int(output_length//chunk_size)
 
     def run(self):
         array_list = []
@@ -141,7 +144,7 @@ class Writer(mp.Process):
             order_num, array = task
             completed_dict[order_num] = array
             self.save_checks(stats,completed_dict,array_list)
-        
+
         while len(completed_dict) > 0:
             self.save_checks(stats,completed_dict,array_list)
 
@@ -158,7 +161,6 @@ class Writer(mp.Process):
                     stats['path'],
                     stats['part_num'],
                     full_array)
-                print(f'Completed {stats['part_num']}')
                 stats['local_total'] = len(next_array)
                 array_list = [next_array]
                 del completed_dict[stats['array_num']]
@@ -182,6 +184,13 @@ class Writer(mp.Process):
             'grav_mag':array[:,8].astype(dtype='d')
         })
         pq.write_table(table,path.format(num))
+        self.report_progress(num)
+
+    def report_progress(self,part_num):
+        if type(self.output_length) == int:
+            print(f'Completed {part_num}/{self.part_count}')
+        else:
+            print(f'Completed {part_num}')
 
 def build_gravity_dataset(path,masses):
     # Getting dates from file
@@ -194,21 +203,28 @@ def build_gravity_dataset(path,masses):
         datetimes = np.asarray(
             [datetime.strptime(row[0][:-4],'%Y-%m-%d %H:%M:%S')
             for row in data_gen])
-
-    work_queue = mp.Manager().Queue()
-    write_queue = mp.Manager().Queue()
-    workers = []
-    for _ in range(mp.cpu_count()-1):
-        workers.append(Worker(
-            work_queue=work_queue,
-            write_queue=write_queue))
+    CPU_COUNT = mp.cpu_count()
+    work_queue = mp.Manager().Queue(maxsize=CPU_COUNT*2)
+    write_queue = mp.Manager().Queue(maxsize=CPU_COUNT*2)
     director = Director(
         path=path,
         datetimes=datetimes,
         masses=masses,
         work_queue=work_queue,
         write_queue=write_queue)
-    writer = Writer(path=path,write_queue=write_queue,chunk_size=30e6)
+
+    workers = []
+    for _ in range(CPU_COUNT-1):
+        workers.append(Worker(
+            work_queue=work_queue,
+            write_queue=write_queue))
+
+    output_length = len(pq.read_table(path+'/h3Index/'))*len(datetimes)
+    writer = Writer(
+        path=path,
+        write_queue=write_queue,
+        chunk_size=30e6,
+        output_length=output_length)
 
     for worker in workers: worker.start()
     writer.start()
@@ -216,7 +232,6 @@ def build_gravity_dataset(path,masses):
     for worker in workers: worker.join()
     director.join()
     writer.join()
-
 
 if __name__ == '__main__':
     path = './Data'
