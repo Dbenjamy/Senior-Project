@@ -2,5 +2,7 @@ requests
 numpy
 pandas
 pyarrow
-dask
+dask[dataframe]
 astropy
+h3
+plotly

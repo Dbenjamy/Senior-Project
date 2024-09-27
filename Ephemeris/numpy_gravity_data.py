@@ -73,6 +73,7 @@ class Worker(mp.Process):
             if task == None:
                 self.work_queue.put(None)
                 self.work_barrier.wait()
+                self.write_queue.put(None)
                 break
             num, date, h3_data, ephems = task
             for row in h3_data:
@@ -120,7 +121,13 @@ class Worker(mp.Process):
             coord[2]/distance*scaler]
 
 class Writer(mp.Process):
-    def __init__(self,path,write_queue,chunk_size,idle_times,output_length=None):
+    def __init__(
+            self,
+            path,
+            write_queue,
+            chunk_size,
+            idle_times,
+            output_length=None):
         super().__init__()
         self.path = path
         self.write_queue = write_queue
@@ -242,7 +249,7 @@ def build_gravity_dataset(path,masses):
         write_queue=write_queue,
         idle_time=idle_times['director_put'])
 
-    work_barrier = mp.Barrier(CPU_COUNT-2,lambda: write_queue.put(None))
+    work_barrier = mp.Barrier(CPU_COUNT-2)
     workers = []
     for _ in range(CPU_COUNT-2):
         workers.append(Worker(
