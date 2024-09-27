@@ -22,8 +22,10 @@ if __name__ == '__main__':
         'Uranus Barycenter':8.681e25,
         'Neptune Barycenter':1.024e26
     }
-    pull_earthquake_data(path=DATA_PATH,starttime=START,endtime=END)
-    format_earthquake_data(path=DATA_PATH)
+    # Works but is not used right now
+    # pull_earthquake_data(path=DATA_PATH,starttime=START,endtime=END)
+    # format_earthquake_data(path=DATA_PATH)
+    
     build_h3_index(
         path=DATA_PATH,
         resolution=RESOLUTION,
