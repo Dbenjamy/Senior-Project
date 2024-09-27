@@ -24,7 +24,10 @@ if __name__ == '__main__':
     }
     pull_earthquake_data(path=DATA_PATH,starttime=START,endtime=END)
     format_earthquake_data(path=DATA_PATH)
-    build_h3_index(path=DATA_PATH,resolution=RESOLUTION,output_prefix='h3_index')
+    build_h3_index(
+        path=DATA_PATH,
+        resolution=RESOLUTION,
+        output_prefix='h3_index')
     build_planets_ephems(
         path=DATA_PATH,
         object_ids=objects_and_masses.keys(),
