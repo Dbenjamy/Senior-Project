@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # Works but is not used right now
     # pull_earthquake_data(path=DATA_PATH,starttime=START,endtime=END)
     # format_earthquake_data(path=DATA_PATH)
-    
+
     build_h3_index(
         path=DATA_PATH,
         resolution=RESOLUTION,
