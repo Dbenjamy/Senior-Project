@@ -24,7 +24,7 @@ def create_3d_plot(df):
             size=5,
             color=initial_colors,
             colorscale='Viridis',
-            colorbar=dict(title='Grav Mag'),
+            colorbar=dict(title='Magnitude of Gravity'),
             opacity=1.0
         )
     )

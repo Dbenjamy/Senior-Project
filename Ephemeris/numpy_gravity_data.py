@@ -7,7 +7,6 @@ import multiprocessing as mp
 from time import sleep, time
 from os.path import exists
 from os import makedirs
-import sys
 
 class Director(mp.Process):
     def __init__(self,path,datetimes,masses,work_queue,write_queue,idle_time):
@@ -37,7 +36,6 @@ class Director(mp.Process):
             start = time()
             self.work_queue.put((i,date,h3_data,filtered))
             self.idle_time.value += time()-start
-            
         while True:
             if self.work_queue.empty() and self.write_queue.empty():
                 self.work_queue.put(None)
@@ -57,16 +55,16 @@ class Director(mp.Process):
             return np.asarray(data)
 
 class Worker(mp.Process):
-    def __init__(self,work_queue,write_queue,idle_get,idle_put):
+    def __init__(self,work_queue,write_queue,work_barrier,idle_get,idle_put):
         super().__init__()
         self.work_queue = work_queue
         self.write_queue = write_queue
+        self.work_barrier = work_barrier
         self.GRAVITY = 6.67430e-11
         self.idle_get = idle_get
         self.idle_put = idle_put 
 
     def run(self):
-        
         while True:
             results = []
             start = time()
@@ -74,9 +72,8 @@ class Worker(mp.Process):
             self.idle_get.value += time()-start
             if task == None:
                 self.work_queue.put(None)
-                self.write_queue.put(None)
+                self.work_barrier.wait()
                 break
-            
             num, date, h3_data, ephems = task
             for row in h3_data:
                 results.append([
@@ -93,7 +90,6 @@ class Worker(mp.Process):
 
     def process_row(self,h3_coord,ephems):
         grav_coord = [0.0,0.0,0.0]
-        
         for planet, mass in ephems:
             rel_coords = self.relative_coords(h3_coord, planet, mass)
             grav_coord = [
@@ -148,6 +144,7 @@ class Writer(mp.Process):
             'path':save_path,
         }
         completed_dict = dict()
+
         while True:
             start = time()
             task = self.write_queue.get()
@@ -210,7 +207,7 @@ class Writer(mp.Process):
             first_line = f'Completed {part_num}\n'
         print(first_line
         + 'Idle Times:\n'
-        +f'\tDirector Get: {round(self.idle_times["director_put"].value,2)}\n'
+        +f'\tDirector Put: {round(self.idle_times["director_put"].value,2)}\n'
         +f'\tWorkers Get:  {round(self.idle_times["worker_get"].value,2)}\n'
         +f'\tWorkers Put:  {round(self.idle_times["worker_put"].value,2)}\n'
         +f'\tWriter Get:   {round(self.idle_times["writer_get"].value,2)}',
@@ -245,11 +242,13 @@ def build_gravity_dataset(path,masses):
         write_queue=write_queue,
         idle_time=idle_times['director_put'])
 
+    work_barrier = mp.Barrier(CPU_COUNT-2,lambda: write_queue.put(None))
     workers = []
     for _ in range(CPU_COUNT-2):
         workers.append(Worker(
             work_queue=work_queue,
             write_queue=write_queue,
+            work_barrier=work_barrier,
             idle_get=idle_times['worker_get'],
             idle_put=idle_times['worker_put']))
 
@@ -261,12 +260,14 @@ def build_gravity_dataset(path,masses):
         chunk_size=30e6,
         idle_times=idle_times,
         output_length=output_length)
+
     print('Starting Gravity Calculations',flush=True)
+    director.start()
     for worker in workers: worker.start()
     writer.start()
-    director.start()
-    for worker in workers: worker.join()
+
     director.join()
+    for worker in workers: worker.join()
     writer.join()
 
 if __name__ == '__main__':
@@ -283,9 +284,9 @@ if __name__ == '__main__':
         'Neptune Barycenter':1.024e26
     }
     build_gravity_dataset(path=path,masses=masses)
-    import dask.dataframe as dd
-    ddf = dd.read_parquet(dd.read_parquet('./Data/GravityData/gravity_0.parquet').head())
+    import pandas as pd
     from graphing_data import create_3d_plot
+    ddf = pd.read_parquet('./Data/GravityData/gravity_0.parquet')
     create_3d_plot(ddf)
 
     

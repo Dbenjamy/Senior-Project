@@ -65,8 +65,8 @@ def query_ephemeris(object_id,start,end,step):
         + f"&STEP_SIZE='{step}'"
         + "&OUT_UNITS='KM-S'"
         + "&CSV_FORMAT=YES")
-    print(f'Querying data for: {object_id}',flush=True)
     response = requests.get(url)
+    print(f'Queried data for: {object_id}',flush=True)
     if response.status_code == 200:
         response_text = (response.text
             [response.text.index('JDTDB,'):response.text.index('$$EOE')]
