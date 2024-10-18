@@ -6,7 +6,7 @@ The goal of this project is to work though the core workflow of any machine lear
 4. Choosing/implementing hyperparameters for the model and formatting the data for training
 5. Training and validating the results of the model
 ### Project Demo
-The demo will query planet ephemerides and graph it as gravity data. You will need to install a few Python libraries:
+The demo will query planet ephemerides and graph it as gravity data. After you clone the repository, you will need to install a few Python libraries:
 ```bash
 python3 -m pip install -r requirements.txt
 ```
