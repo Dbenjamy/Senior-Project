@@ -6,10 +6,10 @@ The goal of this project is to work though the core workflow of any machine lear
 4. Choosing/implementing hyperparameters for the model and formatting the data for training
 5. Training and validating the results of the model
 ## Technologies Used
-* [Horizons API](https://ssd.jpl.nasa.gov/horizons/) from NASA
+* [h3](https://h3geo.org/) by Uber - 3.7.7
 * [Astropy](https://www.astropy.org/) - 6.1.4
 * [Dask](https://www.dask.org/) - 2024.9.0
-* [h3](https://h3geo.org/) by Uber - 3.7.7
+* [Horizons API](https://ssd.jpl.nasa.gov/horizons/) from NASA
 * [Requests](https://pypi.org/project/requests/) - 2.32.3
 * Python core libraries: multiproccessing, threading, numpy
 ## Project Demo
