@@ -29,7 +29,7 @@ The project is organized into four directories:
 - Ephemeris: querying and transforming ephemeris data, ephemeris data being the locations of the main celestial bodies in our solar system
 ## Completed
 - Data structure has been generated
-- All relevent data for the model has been collected including earthquake and ephemerides
+- All relevent data for the model has been collected including earthquakes and ephemerides
 - Gravity data for the major celestial bodies has been mapped to the Earth's surface
 ## In Progress
 - Design traversal algorithm for data
