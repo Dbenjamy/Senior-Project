@@ -13,7 +13,9 @@ The goal of this project is to work though the core workflow of any machine lear
 * [Requests](https://pypi.org/project/requests/) - 2.32.3
 * Python core libraries: multiproccessing, threading, numpy
 ## Project Demo
-The demo will query planet ephemerides and graph it as gravity data. You will need Python 3.12 or higher. After you clone the repository, you will need to install a few Python libraries:
+You can either watch [this video of the demo](https://youtu.be/-nU9fxZI8H0) or run the project yourself with the following:
+
+The demo will query planet ephemerides, transform that into gravity data, and graph it. You will need Python 3.12 or higher. After you clone the repository, you will need to install a few Python libraries:
 ```bash
 python3 -m pip install -r requirements.txt
 ```

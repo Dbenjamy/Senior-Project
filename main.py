@@ -2,7 +2,7 @@ from Earthquakes.earthquake_history import pull_earthquake_data, format_earthqua
 from DataStructure.h3_data_structure import build_h3_index
 from Ephemeris.ephem_requests import build_planets_ephems
 from Ephemeris.numpy_gravity_data import build_gravity_dataset
-from Ephemeris.graphing_data import create_3d_plot
+from Ephemeris.graphing_data import create_animated_3d_plot
 import pandas as pd
 
 if __name__ == '__main__':
@@ -40,4 +40,4 @@ if __name__ == '__main__':
     # This demonstation graph only works with one file. The entire dataset is
     # loaded into memory, so only small datasets are recommended
     ddf = pd.read_parquet(DATA_PATH+'/GravityData/gravity_0.parquet')
-    create_3d_plot(ddf)
+    create_animated_3d_plot(ddf)
