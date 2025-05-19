@@ -251,15 +251,8 @@ def build_gravity_dataset(path,planet_entries_dict):
         planet_entries_dict)
     masses, ephems = group_planet_data(planet_entries)
     h3_data = load_h3_data(path)
-    # shared_masses, sh_masses = build_shared_numpy("masses",masses)
-    # shared_ephems, sh_ephems = build_shared_numpy("ephems",ephems)
-    # shared_h3, sh_h3         = build_shared_numpy("h3_data",h3_data)
-    # build_shared_numpy("h3_data",h3_data)
-    print("\n")
-    infer_2D_dtype(ephems)
-    print("\n")
-    return None
-
+    shared_masses, sh_masses = build_shared_numpy("masses",masses)
+    shared_ephems, sh_ephems = build_shared_numpy("ephems",ephems)
     
     datetimes = shared_ephems[:,0]
     CPU_COUNT = mp.cpu_count()
@@ -274,7 +267,6 @@ def build_gravity_dataset(path,planet_entries_dict):
         'writer_get': mp.Value('f',0)
     }
     director = Director(
-        path=path,
         datetimes=datetimes,
         planet_entries_dict=planet_entries_dict,
         work_queue=work_queue,
@@ -326,29 +318,34 @@ def build_shared_numpy(name:str,
         local_shape = shape
         local_dtype = dtype
     else:
-        local_size  = data.size
+        local_size  = data.nbytes
         local_shape = data.shape
-        local_dtype = data.dtype#infer_2D_dtype(data)
+        local_dtype = data.dtype
     sh = SharedMemory(name,create=True,size=local_size)
-    print(sh.size)
-    print(data.size)
     shared_data = np.ndarray(shape=local_shape,dtype=local_dtype,buffer=sh.buf)
-    # shared_data[...] = data[...]
-    # if read_only:
-    #     shared_data.flags.writeable = False
-    # return shared_data, sh
+    shared_data[...] = data[...]
+    if read_only:
+        shared_data.flags.writeable = False
+    return shared_data, sh
 
 def pack_numpy_spec(data:npt.NDArray,name:str) -> dict:
-    dtype = tuple(("col_"+str(i),np.array([data[0,i]]).dtype)
-        for i in range(data.shape[1]))
-    return {"name":name,"size":data.size,"shape":data.shape,"dtype":dtype}
+    return {"name":name,"size":data.nbytes,"shape":data.shape,"dtype":data.dtype}
 
 def infer_2D_dtype(data:npt.NDArray):
+    if len(data.shape) == 1:
+        raise ValueError("Value should already be inferred.")
+    type_mapping = {
+        datetime:"datetime64[ns]",
+        float:"float64",
+    }
+    dtypes = []
     for i in range(data.shape[1]):
-        print(np.array(data[:,i])[0])
-        break
-    return tuple(("col_"+str(i),np.array([data[0,i]]).dtype)
-        for i in range(data.shape[1]))
+        object = data[0,i]
+        if type(object) != str:
+            dtypes.append(("col_"+str(i),type_mapping[type(object)]))
+        else:
+            dtypes.append(("col_"+str(i),str(len(object))))
+    return dtypes
 
 
 def group_planet_data(planet_entries:tuple[str,float]):
