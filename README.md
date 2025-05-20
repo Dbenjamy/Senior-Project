@@ -1,4 +1,4 @@
-# Modeling Gravity for Earthquake CNN - Senior Capstone
+# Modeling Gravity - Senior Capstone
 The goal of this project is to pull, transform, and map ephemeris data (planet data) to model gravity on the surface of the Earth
 ## Technologies Used
 * [h3](https://h3geo.org/) by Uber - 3.7.7
