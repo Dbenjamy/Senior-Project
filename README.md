@@ -1,17 +1,11 @@
 # Modeling Gravity for Earthquake CNN - Senior Capstone
-The goal of this project is to work though the core workflow of any machine learning model:
-1. Backround research and initial testing
-2. Collecting and parsing data
-3. Creating the data structure to be used in training the model
-4. Choosing/implementing hyperparameters for the model and formatting the data for training
-5. Training and validating the results of the model
+The goal of this project is to pull, transform, and map ephemeris data (planet data) to model gravity on the surface of the Earth
 ## Technologies Used
 * [h3](https://h3geo.org/) by Uber - 3.7.7
 * [Astropy](https://www.astropy.org/) - 6.1.4
-* [Dask](https://www.dask.org/) - 2024.9.0
 * [Horizons API](https://ssd.jpl.nasa.gov/horizons/) from NASA
 * [Requests](https://pypi.org/project/requests/) - 2.32.3
-* Python core libraries: multiproccessing, threading, numpy
+* Python core libraries: Numpy, multiproccessing, threading
 ## Project Demo
 You can either watch [this video of the demo](https://youtu.be/-nU9fxZI8H0) or run the project yourself with the following:
 
@@ -24,18 +18,14 @@ Then run `main`:
 python3 main.py
 ```
 ## Layout
-The project is organized into four directories:
+The project is organized into three directories:
 - Data: where all generated data is stored
-- DataStructure: code relevent to creating the data structure
-- Earthquakes: querying and organizing earthquake data
+- DataStructure: code relevent to creating organizing data 
 - Ephemeris: querying and transforming ephemeris data, ephemeris data being the locations of the main celestial bodies in our solar system
 ## Completed
 - Data structure has been generated
-- All relevent data for the model has been collected including earthquakes and ephemerides
+- All relevent data for the model has been collected including ephemerides
 - Gravity data for the major celestial bodies has been mapped to the Earth's surface
 ## In Progress
-- Design traversal algorithm for data
-- Join gravity and earthquake data into single table
-- Construct CNN model
-- Decide on hyperparameters; thinking I'll use the cyclical focal loss function since there are many empty data points
-- Train model and analyse the results
+- Implement Python shared memory for more efficient data transformations
+- Turn project into imporable Python package

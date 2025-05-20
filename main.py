@@ -1,4 +1,3 @@
-from Earthquakes.earthquake_history import pull_earthquake_data, format_earthquake_data
 from DataStructure.h3_data_structure import build_h3_index
 from Ephemeris.ephem_requests import build_planets_ephems
 from Ephemeris.numpy_gravity_data import build_gravity_dataset
@@ -22,9 +21,6 @@ if __name__ == '__main__':
         'Uranus Barycenter':8.681e25,
         'Neptune Barycenter':1.024e26
     }
-    # Works but is not used right now
-    # pull_earthquake_data(path=DATA_PATH,starttime=START,endtime=END)
-    # format_earthquake_data(path=DATA_PATH)
 
     build_h3_index(
         path=DATA_PATH,
