@@ -5,8 +5,6 @@ charset-normalizer==3.3.2
 click==8.1.7
 cloudpickle==3.0.0
 colorama==0.4.6
-dask==2024.9.0
-dask-expr==1.1.14
 fsspec==2024.9.0
 h3==3.7.7
 idna==3.10
